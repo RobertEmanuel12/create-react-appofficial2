@@ -1,57 +1,131 @@
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import './App.css';
 
+import firebase from 'firebase/app';
+import 'firebase/firestore';
+import 'firebase/auth';
+import 'firebase/analytics';
+
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { useCollectionData } from 'react-firebase-hooks/firestore';
+
+firebase.initializeApp({
+  // your config
+     apiKey: "AIzaSyDtEKvygcWvV7nEo4QwjZLv_K7jaIjhads",
+    authDomain: "chatapp-36f93.firebaseapp.com",
+    databaseURL: "https://chatapp-36f93.firebaseio.com",
+    projectId: "chatapp-36f93",
+    storageBucket: "chatapp-36f93.appspot.com",
+    messagingSenderId: "48202368483",
+    appId: "1:48202368483:web:79ba235b09186bdf9a4cd6",
+    measurementId: "G-0ZYRKTDF0K"
+})
+
+const auth = firebase.auth();
+const firestore = firebase.firestore();
+const analytics = firebase.analytics();
+
+
 function App() {
-  const [date, setDate] = useState(null);
-  useEffect(() => {
-    async function getDate() {
-      const res = await fetch('/api/date');
-      const newDate = await res.text();
-      setDate(newDate);
-    }
-    getDate();
-  }, []);
+
+  const [user] = useAuthState(auth);
+
   return (
-    <main>
-      <h1>Create React App + Go API</h1>
-      <h2>
-        Deployed with{' '}
-        <a
-          href="https://vercel.com/docs"
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          Vercel
-        </a>
-        !
-      </h2>
-      <p>
-        <a
-          href="https://github.com/vercel/vercel/tree/master/examples/create-react-app"
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          This project
-        </a>{' '}
-        was bootstrapped with{' '}
-        <a href="https://facebook.github.io/create-react-app/">
-          Create React App
-        </a>{' '}
-        and contains three directories, <code>/public</code> for static assets,{' '}
-        <code>/src</code> for components and content, and <code>/api</code>{' '}
-        which contains a serverless <a href="https://golang.org/">Go</a>{' '}
-        function. See{' '}
-        <a href="/api/date">
-          <code>api/date</code> for the Date API with Go
-        </a>
-        .
-      </p>
-      <br />
-      <h2>The date according to Go is:</h2>
-      <p>{date ? date : 'Loading date...'}</p>
-    </main>
+    <div className="App">
+      <header>
+        <h1>⚛️🔥💬</h1>
+        <SignOut />
+      </header>
+
+      <section>
+        {user ? <ChatRoom /> : <SignIn />}
+      </section>
+
+    </div>
   );
 }
+
+function SignIn() {
+
+  const signInWithGoogle = () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider);
+  }
+
+  return (
+    <>
+      <button className="sign-in" onClick={signInWithGoogle}>Sign in with Google</button>
+      <p>Do not violate the community guidelines or you will be banned for life!</p>
+    </>
+  )
+
+}
+
+function SignOut() {
+  return auth.currentUser && (
+    <button className="sign-out" onClick={() => auth.signOut()}>Sign Out</button>
+  )
+}
+
+
+function ChatRoom() {
+  const dummy = useRef();
+  const messagesRef = firestore.collection('messages');
+  const query = messagesRef.orderBy('createdAt').limit(25);
+
+  const [messages] = useCollectionData(query, { idField: 'id' });
+
+  const [formValue, setFormValue] = useState('');
+
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+
+    const { uid, photoURL } = auth.currentUser;
+
+    await messagesRef.add({
+      text: formValue,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      uid,
+      photoURL
+    })
+
+    setFormValue('');
+    dummy.current.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  return (<>
+    <main>
+
+      {messages && messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
+
+      <span ref={dummy}></span>
+
+    </main>
+
+    <form onSubmit={sendMessage}>
+
+      <input value={formValue} onChange={(e) => setFormValue(e.target.value)} placeholder="say something nice" />
+
+      <button type="submit" disabled={!formValue}>🕊️</button>
+
+    </form>
+  </>)
+}
+
+
+function ChatMessage(props) {
+  const { text, uid, photoURL } = props.message;
+
+  const messageClass = uid === auth.currentUser.uid ? 'sent' : 'received';
+
+  return (<>
+    <div className={`message ${messageClass}`}>
+      <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
+      <p>{text}</p>
+    </div>
+  </>)
+}
+
 
 export default App;
